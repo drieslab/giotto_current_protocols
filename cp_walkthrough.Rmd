@@ -282,49 +282,8 @@ plotUMAP(my_giotto_object,
                            save_format = 'pdf'))
 ```
 
-# Differentially expressed genes (DEGs) - not shown in protocols paper
-The following code demonstrates how to find differentially expressed genes for our spatial transcriptomic data.
-
-```{r}
-# Identify DEGs for each cluster
-ST_scran_markers_subclusters = findMarkers_one_vs_all(gobject = my_giotto_object,
-                                                      method = 'scran',
-                                                      expression_values = 'normalized',
-                                                      cluster_column = 'leiden_clus')
-
-# umap with top gene per cluster
-ST_top1genes = ST_scran_markers_subclusters[, head(.SD, 1), by = 'cluster']$genes
-dimGenePlot2D(gobject = my_giotto_object,
-              genes = ST_top1genes, expression_values = 'scaled',
-              cow_n_col = 3, point_shape = 'border', point_size = 2,
-              save_param = list(save_name = 'suppfig1_dimGenePlot2D', 
-                                base_width = 12, 
-                                base_height = 12, 
-                                save_format = 'pdf'))
-
-# heatmap with top 3 genes per cluster
-ST_top3genes = ST_scran_markers_subclusters[, head(.SD, 3), by = 'cluster']$genes
-plotMetaDataHeatmap(gobject = my_giotto_object,
-                    selected_genes = ST_top3genes,
-                    metadata_cols = c('leiden_clus'),
-                    save_param = list(save_name = 'suppfig2_plotMetaDataHeatmap', 
-                                      base_width = 6, 
-                                      base_height = 6, 
-                                      save_format = 'pdf'))
-
-# simpler method
-ST_Sig_scran = unique(ST_scran_markers_subclusters[ranking <= 100]$genes) 
-
-st_cell_type_names = unique(ST_scran_markers_subclusters$cluster)
-ST_sign_list = list()
-for(name in st_cell_type_names) {
-  topgenes = ST_scran_markers_subclusters[cluster == name][1:100]$genes
-  ST_sign_list[[name]] = topgenes
-}
-```
-
-# scRNA-seq analysis (not shown in protocols paper)
-The following is all the code used to process our single cell data to use for cell-type enrichment. These data from these results have already been downloaded and will be used for future steps. 
+### scRNA-seq analysis (not shown in protocols paper)
+The following is all the code used to process our single cell data to use for cell-type enrichment. We will demonstrate DEG identification with the processed object.
 ```{r}
 # Create Giotto object
 expression_data <- readRDS(paste0(data_directory, "/scrna_expr.rds"))
@@ -508,8 +467,10 @@ plotUMAP(my_scrna_object,
                            base_width = 6, 
                            base_height = 6, 
                            save_format = 'pdf'))
+```
 
-
+## Differentially expressed genes (DEGs)
+```{r}
 # Find differentially expressed genes
 scran_markers_subclusters = findMarkers_one_vs_all(gobject = my_scrna_object,
                                                    method = 'scran',
@@ -521,25 +482,22 @@ top4genes = scran_markers_subclusters[, head(.SD, 4), by = 'cluster']
 plotMetaDataHeatmap(gobject = my_scrna_object, 
                     selected_genes = top4genes$genes,
                     metadata_cols = c('merge_cell_types'),
-                    save_param = list(save_name = 'scRNA_seq_7_plotMetaDataHeatmap', 
+                    save_param = list(save_name = 'fig13_plotMetaDataHeatmap', 
                                       base_width = 6, 
                                       base_height = 6, 
                                       save_format = 'pdf'))
 ```
 
-# Basic protocol 4: Cell-type enrichment and deconvolution analyses
 
-As explained above, we will use the processed data that has already been downloaded. 
-```{r}
-cell_type_vector <- readRDS(paste0(data_directory, "cell_type_vector.RDS"))
-normalized_sc_matrix <- readRDS(paste0(data_directory, "normalized_sc_matrix.RDS"))
-sign_list <- readRDS(paste0(save_directory, "sign_list.RDS"))
-```
+# Basic protocol 4: Cell-type enrichment and deconvolution analyses
 
 ##Cell-type enrichment
 
 Parametric Analysis of Gene Set Enrichment (PAGE)
 ```{r}
+# list of signature genes
+sign_list <- Sig_scran
+
 # make PAGE signature matrix
 PAGEsignMatrix <- makeSignMatrixPAGE(sign_names = cell_type_names,
                                       sign_list = sign_list)
@@ -557,7 +515,7 @@ spatCellPlot(gobject = my_giotto_object,
              coord_fix_ratio = 1, 
              point_size = .75,
              point_shape = "no_border",
-             save_param = list(save_name = 'fig13_spatCellPlot', 
+             save_param = list(save_name = 'fig14_spatCellPlot', 
                                base_width = 12, 
                                base_height = 12, 
                                save_format = 'pdf'))
@@ -585,7 +543,7 @@ spatDeconvPlot(gobject = my_giotto_object,
                cell_color_code = colors,
                alpha = 0.75,
                show_image = TRUE,
-               save_param = list(save_name = 'fig14a_spatDeconvPlot', 
+               save_param = list(save_name = 'fig15a_spatDeconvPlot', 
                                  base_width = 6, 
                                  base_height = 6, 
                                  save_format = 'pdf'))
@@ -622,7 +580,7 @@ spatPlot(my_giotto_object,
          spatial_grid_name = 'spatial_grid',
          cell_color_code = my_colors,
          coord_fix_ratio = 1,
-         save_param = list(save_name = 'fig15_spatPlot', 
+         save_param = list(save_name = 'fig16_spatPlot', 
                            base_width = 6, 
                            base_height = 6, 
                            save_format = 'pdf'))
@@ -634,7 +592,7 @@ spatPlot(my_giotto_object,
 plotStatDelaunayNetwork(gobject = my_giotto_object, 
                         maximum_distance = 400, 
                         save_plot = TRUE,
-                        save_param = list(save_name = 'fig16_plotStatDelaunayNetwork', 
+                        save_param = list(save_name = 'fig17_plotStatDelaunayNetwork', 
                                           base_width = 6, 
                                           base_height = 6, 
                                           save_format = 'pdf'))
@@ -654,7 +612,7 @@ spatPlot(gobject = my_giotto_object, show_network = T, show_image = T,
          point_size = 3, 
          cell_color = "leiden_clus",
          coord_fix_ratio = 1,
-         save_param = list(save_name = 'fig_17spatPlot', 
+         save_param = list(save_name = 'fig_18spatPlot', 
                            base_width = 6, 
                            base_height = 6, 
                            save_format = 'pdf'))
@@ -676,7 +634,7 @@ spatGenePlot(gobject = my_giotto_object,
              genes = interesting_genes,
              cow_n_col = 2,
              point_size = 2.5,
-             save_param = list(save_name = 'fig18_spatGenePlot', 
+             save_param = list(save_name = 'fig19_spatGenePlot', 
                                base_width = 8, 
                                base_height = 6, 
                                save_format = 'pdf'))
@@ -697,7 +655,7 @@ spat_cor_netw_DT = clusterSpatialCorGenes(spat_cor_netw_DT,
 heatmSpatialCorGenes(my_giotto_object,
                      spatCorObject = spat_cor_netw_DT,
                      use_clus_name = 'spat_netw_clus',
-                     save_param = list(save_name = 'fig19_heatmSpatialCorGenes', 
+                     save_param = list(save_name = 'fig20_heatmSpatialCorGenes', 
                                        base_width = 7, 
                                        base_height = 6, 
                                        save_format = 'pdf'))
@@ -718,7 +676,7 @@ spatCellPlot(my_giotto_object,
              cell_annotation_values = as.character(c(1:8)),
              point_size = 1.5, 
              cow_n_col = 3,
-             save_param = list(save_name = 'fig20_spatCellPlot', 
+             save_param = list(save_name = 'fig21_spatCellPlot', 
                                base_width = 10, 
                                base_height = 8, 
                                save_format = 'pdf'))
@@ -760,30 +718,9 @@ spatPlot2D(my_giotto_object,
            cell_color_code = mycolors, 
            point_size = 4.75,
            coord_fix_ratio = 1,
-           save_param = list(save_name = 'fig21_spatCellPlot', 
-                             base_width = 6, 
-                             base_height = 6,
-                             save_format = 'pdf'))
-
-# intrinsic + extrinsic
-spatPlot2D(my_giotto_object,
-           cell_color = 'HMRF_k8_b.10', show_image = TRUE,
-           cell_color_code = mycolors,
-           point_size = 4.75,
-           coord_fix_ratio = 1,
            save_param = list(save_name = 'fig22a_spatCellPlot', 
                              base_width = 6, 
-                             base_height = 6, 
-                             save_format = 'pdf'))
-
-spatPlot2D(my_giotto_object,
-           cell_color = 'HMRF_k8_b.15', show_image = TRUE,
-           cell_color_code = mycolors,
-           point_size = 4.75,
-           coord_fix_ratio = 1,
-           save_param = list(save_name = 'fig22b_spatCellPlot', 
-                             base_width = 6, 
-                             base_height = 6, 
+                             base_height = 6,
                              save_format = 'pdf'))
 
 spatPlot2D(my_giotto_object,
@@ -791,7 +728,7 @@ spatPlot2D(my_giotto_object,
            cell_color_code = mycolors,
            point_size = 4.75,
            coord_fix_ratio = 1,
-           save_param = list(save_name = 'fig_2c_spatCellPlot', 
+           save_param = list(save_name = 'fig_22b_spatCellPlot', 
                              base_width = 6, 
                              base_height = 6, 
                              save_format = 'pdf'))

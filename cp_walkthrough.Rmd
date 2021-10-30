@@ -883,3 +883,134 @@ plotCCcomDotplot(gobject = my_giotto_object,
                                    save_format = 'pdf'))
 ```
 
+
+# Support protocol: Assembly of a registered 3D Giotto object from 2D slices
+
+!!! Begin by unzipping ImgReg.zip in your selected data_directory into a folder of the same name !!!
+
+
+This protocol starts off working in Fiji (version 2.3.0+/1.53m+) before returning to Giotto.
+Fiji is an external GUI-based program for image manipulation and analysis that can be downloaded at the following link:
+[https://imagej.net/software/fiji/downloads]
+
+Instructions in the protocol paper should then be followed until you get the .xml file output before returning to this script.
+
+Alternatively, use the given example .xml files by setting the commented out xmlpaths below.
+
+## Load in spatial expression and registration data
+```{r}
+# Get filepaths
+exprpaths <- list(paste0(data_directory, "/P2_1_expression.csv"),
+                  paste0(data_directory, "/P2_2_expression.csv"),
+                  paste0(data_directory, "/P2_3_expression.csv"))
+spatpaths <- list(paste0(data_directory, "/P2_1_spatial_locs.csv"),
+                  paste0(data_directory, "/P2_2_spatial_locs.csv"),
+                  paste0(data_directory, "/P2_3_spatial_locs.csv"))
+xmlpaths <- list(paste0(data_directory, "/imgReg/transforms/P2_1_0.25.xml"),
+                 paste0(data_directory, "/imgReg/transforms/P2_2_0.25.xml"),
+                 paste0(data_directory, "/imgReg/transforms/P2_3_0.25.xml"))
+
+# Alternatively, use the given example .xml files by setting the following path:
+# xmlpaths <- list.files(paste0(data_directory, "/imgReg/transforms/exampleXMLs"), full.names = TRUE)
+
+# Read in data
+xmls <- lapply(xmlpaths, readChar, nchar = 1000)
+spatlocs <- lapply(spatpaths, read.csv)
+exprCounts <- lapply(exprpaths, Giotto::readExprMatrix)
+```
+
+## Set Z axis spacing
+```{r}
+z_vals <- c(0,10,20)
+z_vals <- z_vals * 1.8
+```
+
+## Create 3D Giotto object
+```{r}
+my_giotto_object_3D <- createRegZStackGobject(expression_list = exprCounts,
+                                              spatlocs_list = spatlocs,
+                                              xvals = "pixel_x",
+                                              yvals = "pixel_y",
+                                              scalefactor = 0.25,
+                                              transformXML = xmls,
+                                              z_vals = z_vals)
+```
+
+Filter the data
+```{r}
+my_giotto_object_3D <- filterGiotto(my_giotto_object_3D,
+                                    expression_threshold = 2,
+                                    gene_det_in_min_cells = 2,
+                                    min_det_genes_per_cell = 100)
+```
+
+## Visualize the 3D spatial data
+```{r}
+spatPlot3D(gobject = my_giotto_object_3D,
+           axis_scale = "cube",
+           return_plot = FALSE,
+           save_param = list(save_name = 'fig_32a_spatPlots_3D'))
+spatPlot3D(gobject = my_giotto_object_3D,
+           axis_scale = "real",
+           return_plot = FALSE,
+           save_param = list(save_name = 'fig_32b_spatPlots_3D'))
+```
+
+## Expression-based clustering (not shown in protocols paper)
+The following is all the code used to produce Leiden clusters for the 3D dataset. These data from these results have already been downloaded and will be used for the next step. 
+```{r}
+my_giotto_object_3D <- normalizeGiotto(my_giotto_object_3D,
+                                       scalefactor = 6000,
+                                       verbose = TRUE)
+
+my_giotto_object_3D <- addStatistics(my_giotto_object_3D)
+
+my_giotto_object_3D <- calculateHVG(my_giotto_object_3D,
+                                    expression_values = 'normalized',
+                                    save_plot = F)
+
+my_giotto_object_3D <- runPCA(gobject = my_giotto_object_3D,
+                              genes_to_use = fDataDT(my_giotto_object_3D)[hvg == 'yes']$gene_ID)
+
+my_giotto_object_3D <- runUMAP(my_giotto_object_3D)
+
+my_giotto_object_3D <- createNearestNetwork(my_giotto_object_3D)
+
+my_giotto_object_3D <- doLeidenCluster(my_giotto_object_3D)
+```
+
+## Load in saved metadata
+As explained above, we will use the processed data that has already been downloaded.
+```{r}
+cellMetadata_3D <- readRDS(file = paste0(data_directory, "/imgReg/cellMetadata3D.rds"))
+my_giotto_object_3D <- addCellMetadata(gobject = my_giotto_object_3D,
+                                       new_metadata = cellMetadata_3D,
+                                       by_column = "cell_ID")
+```
+
+# Visualize 3D data with leiden clusters
+```{r}
+my_colors <- c("#9442f2","#b6d326","#fa002a","#fa00d4","#013bb5",
+               "#666666","#017fd6","#50cfff","#cf8cff","#01d671")
+
+spatPlot3D(gobject = my_giotto_object_3D,
+           return_plot = FALSE,
+           axis_scale = "cube",
+           point_size = 5,
+           cell_color_code = my_colors,
+           save_param = list(save_name = 'fig_33a_leiden3D'),
+           cell_color = "leiden_clus")
+
+spatPlot2D(gobject = my_giotto_object_3D,
+           return_plot = FALSE,
+           point_size = 3.5,
+           coord_fix_ratio = 1,
+           cell_color_code = my_colors,
+           save_param = list(save_name = 'fig_33b_leiden3D', base_width = 6, base_height = 6, save_format = 'pdf'),
+           cell_color = "leiden_clus")
+```
+
+
+
+
+

@@ -982,7 +982,7 @@ my_giotto_object_3D <- doLeidenCluster(my_giotto_object_3D)
 ## Load in saved metadata
 As explained above, we will use the processed data that has already been downloaded.
 ```{r}
-cellMetadata_3D = readRDS(file = paste0(data_directory, "/imgReg/cellMetadata3D.rds"))
+cellMetadata_3D <- readRDS(file = paste0(data_directory, "/imgReg/cellMetadata3D.rds"))
 my_giotto_object_3D <- addCellMetadata(gobject = my_giotto_object_3D,
                                        new_metadata = cellMetadata_3D,
                                        by_column = "cell_ID")
@@ -990,8 +990,8 @@ my_giotto_object_3D <- addCellMetadata(gobject = my_giotto_object_3D,
 
 # Visualize 3D data with leiden clusters
 ```{r}
-my_colors = c("#9442f2","#b6d326","#fa002a","#fa00d4","#013bb5",
-              "#666666","#017fd6","#50cfff","#cf8cff","#01d671")
+my_colors <- c("#9442f2","#b6d326","#fa002a","#fa00d4","#013bb5",
+               "#666666","#017fd6","#50cfff","#cf8cff","#01d671")
 
 spatPlot3D(gobject = my_giotto_object_3D,
            return_plot = FALSE,

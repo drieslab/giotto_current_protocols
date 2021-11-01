@@ -1,0 +1,627 @@
+1
+```{r}
+xcode-select --install
+```
+# BP1 - Getting Giotto set up for use
+2
+```{r}
+remotes::install_gitub("RubD/Giotto")
+library(Giotto)
+```
+3
+```{r}
+installGiottoEnvironment()
+```
+4
+```{r}
+data_directory <- "~/ST_SCC_data"
+save_directory <- "~/save_dir"
+# Download data
+getSpatialDataset(dataset = "ST_SCC", directory = data_dir, method = "wget")
+
+```
+5
+```{r}
+my_instructions <- createGiottoInstructions(save_plot = TRUE,
+                                            save_dir = save_directory)
+
+```
+6
+```{r}
+my_giotto_object <- createGiottoObject(raw_exprs=paste0(data_directory,
+                                                        "/P2_2_expression.csv"),
+                                       spatial_locs=paste0(data_directory,
+                                                         "/P2_2_spatial_locs.csv"),
+                                       instructions=my_instructions)
+
+```
+7
+```{r}
+pDataDT(my_giotto_object)
+fDataDT(my_giotto_object)
+
+```
+8
+```{r}
+my_giotto_image <- createGiottoImage(gobject = my_giotto_object,
+                                     mg_object = paste0(data_directory,
+                                                        "/P2_2_0.0625.jpg"))
+my_giotto_object <- addGiottoImage(gobject = my_giotto_object,
+                                   images = list(my_giotto_image))
+
+```
+9
+```{r}
+spatPlot2D(gobject = my_giotto_object,
+           show_image = TRUE,
+           point_alpha = 0.5)
+
+```
+10
+```{r}
+my_giotto_object <- updateGiottoImage(gobject = my_giotto_object,
+                                      image_name = "image",
+                                      xmax_adj = 4857.2,
+                                      xmin_adj = 3441.1,
+                                      ymax_adj = 2146.7,
+                                      ymin_adj = 5302.5)
+
+spatPlot2D(gobject = my_giotto_object,
+           show_image = TRUE,
+           point_alpha = 0.5)
+
+```
+# BP2 - Pre-Processing
+11
+```{r}
+filterCombinations(gobject = my_giotto_object, 
+                   expression_thresholds = c(1, 2),
+                   gene_det_in_min_cells = c(2, 5, 10),
+                   min_det_genes_per_cell = c(100, 200, 500))
+
+```
+12
+```{r}
+my_giotto_object <- filterGiotto(gobject = my_giotto_object,
+                                 expression_threshold = 2,
+                                 gene_det_in_min_cells = 2,
+                                 min_det_genes_per_cell = 100)
+
+```
+13
+```{r}
+my_giotto_object <- normalizeGiotto(gobject = my_giotto_object,
+                                    norm_methods = "standard",
+                                    scalefactor = 6000,
+                                    scale_order = "first_genes")
+
+```
+14
+```{r}
+my_giotto_object <- addStatistics(gobject = my_giotto_object)
+```
+15
+```{r}
+# view gene and cell stats respectively
+head(fDataDT(my_giotto_object))
+head(pDataDT(my_giotto_object))
+
+```
+16
+```{r}
+mitochondrial_genes = grep('MT-', my_giotto_object@gene_ID, value = T)
+my_giotto_object = addGenesPerc(gobject = my_giotto_object,
+                                genes = mitochondrial_genes, vector_name = 'mito')
+
+```
+17
+```{r}
+# number of genes
+spatPlot2D(gobject = my_giotto_object,
+           show_image = TRUE,
+           point_alpha = 1,
+           point_size = 5,
+           cell_color = 'nr_genes', color_as_factor = F)
+
+# mitochondrial content percentage
+spatPlot2D(gobject = my_giotto_object,
+           show_image = TRUE,
+           point_alpha = 1,
+           point_size = 5,
+           cell_color = 'mito', color_as_factor = F)
+
+```
+18
+```{r}
+my_giotto_object <- adjustGiottoMatrix(gobject = my_giotto_object,
+                                       covariate_columns = c('nr_genes', 'mito'),
+                                       update_slot = 'custom')
+
+```
+# BP3 - Clustering and cell-type identification
+19
+```{r}
+my_giotto_object <- calculateHVG(gobject = my_giotto_object, 
+                                 expression_values = "normalized",
+                                 method = "cov_groups",
+                                 nr_expression_groups = 20,
+                                 zscore_threshold = 1.5)
+
+```
+20
+```{r}
+my_giotto_object <- runPCA(gobject = my_giotto_object,
+                           expression_values = "normalized",
+                           genes_to_use = "hvg")
+
+```
+21
+```{r}
+plotPCA(gobject = my_giotto_object)
+```
+22
+```{r}
+screePlot(gobject = my_giotto_object,
+          expression_values = "normalized",
+          genes_to_use = "hvg",
+          ncp = 20, 
+          ylim = c(0, 12.5))
+
+```
+23
+```{r}
+my_giotto_object <- runUMAP(gobject = my_giotto_object, 
+                            dimensions_to_use = 1:10,
+                            n_components = 2)
+# to plot our umap: 
+plotUMAP(my_giotto_object)
+
+```
+24
+```{r}
+my_giotto_object <- createNearestNetwork(gobject = my_giotto_object,
+                                         dimensions_to_use = 1:10)
+
+```
+25
+```{r}
+my_giotto_object <- doLeidenCluster(gobject = my_giotto_object,
+                                    name = "leiden_clus")
+
+```
+26
+```{r}
+plotUMAP(gobject = my_giotto_object,
+         cell_color = 'leiden_clus',
+         point_size = 2)
+
+```
+27
+```{r}
+ST_scran_markers_subclusters = findMarkers_one_vs_all(gobject = my_giotto_object,
+                                                   method = 'scran',
+                                                   expression_values ='normalized',
+                                                   cluster_column = 'leiden_clus')
+
+```
+28
+```{r}
+ST_top3genes = ST_scran_markers_subclusters[, head(.SD, 3), by = 'cluster']$genes
+
+plotMetaDataHeatmap(gobject = my_giotto_object,
+                    selected_genes = ST_top3genes,
+                    metadata_cols = c('leiden_clus'))
+
+```
+# BP4 - Cell-type enrichment and deconvolution analysis
+29
+```{r}
+# normalized matrix
+normalized_sc_matrix = readRDS(paste0(save_directory,”/”, “normalized_sc_matrix.RDS”))
+
+# cell type vector
+cell_type_vector = readRDS(paste0(save_directory,”/”, “cell_type_vector.RDS”))
+
+# list of marker genes
+sign_list <- readRDS(paste0(save_directory,”/”, “sign_list.RDS”))
+
+```
+30
+```{r}
+# list of signature genes
+PAGEsignMatrix <- makeSignMatrixPAGE(sign_names = names(sign_list),
+                                      sign_list = sign_list)
+
+```
+31
+```{r}
+my_giotto_object <- runPAGEEnrich(gobject = my_giotto_object, 
+                                  sign_matrix = PAGEsignMatrix)
+
+```
+32
+```{r}
+spatCellPlot(gobject = my_giotto_object, 
+             spat_enr_names = 'PAGE',
+             cell_annotation_values = cell_types_subset,
+             cow_n_col = 4, coord_fix_ratio = NULL, point_size = 1,
+             point_shape = "no_border")
+
+```
+33
+```{r}
+dwls_signature_matrix <- makeSignMatrixDWLSfromMatrix(matrix = normalized_sc_matrix,
+                                                      sign_gene = unlist(sign_list),
+                                                      cell_type_vector = cell_type_vector)
+
+```
+34
+```{r}
+my_giotto_object <- runDWLSDeconv(gobject = my_giotto_object,
+                                  sign_matrix = dwls_signature_matrix)
+
+```
+35
+```{r}
+spatDeconvPlot(gobject = my_giotto_object,
+               radius = 100,
+               cell_color_code = #insert color choice vector here ,
+               show_image = TRUE,
+               return_plot = TRUE)
+
+```
+36
+```{r}
+my_giotto_object <- createSpatialGrid(gobject = my_giotto_object,
+                                      sdimx_stepsize = 500,
+                                      sdimy_stepsize = 500,
+                                      minimum_padding = 0)
+
+# Visualize spatial grid
+spatPlot(gobject = my_giotto_object, 
+         cell_color = 'leiden_clus', 
+         point_size = 4,
+         show_grid = T, 
+         grid_color = 'grey', 
+         spatial_grid_name = 'spatial_grid')
+
+```
+37
+```{r}
+plotStatDelaunayNetwork(gobject = my_giotto_object, maximum_distance = 400)
+```
+38
+```{r}
+my_giotto_object <- createSpatialNetwork(gobject = my_giotto_object,
+                                         minimum_k = 6,
+                                         maximum_distance_delaunay = 350)
+
+```
+39
+```{r}
+spatPlot(gobject = my_giotto_object, 
+         show_network = T,
+         point_shape = "no_border",
+         network_color = 'black', 
+         spatial_network_name = 'Delaunay_network',
+         point_size = 3, 
+         cell_color = "leiden_clus",
+         coord_fix_ratio = 1)
+
+```
+40
+```{r}
+binspect_k <- binSpect(gobject = my_giotto_object,
+                       bin_method = "kmeans",
+                       expression_values = "normalized",
+                       spatial_network_name = "Delaunay_network")
+
+```
+41
+```{r}
+interesting_genes = c("IGFBP4", "KRT1", "MZB1", "SPRR1B")
+spatGenePlot(gobject = my_giotto_object,
+             expression_values = "scaled",
+             genes = interesting_genes,
+             cow_n_col = 2,
+             point_size = 2.5)
+
+```
+42
+```{r}
+ext_spatial_genes = binspect_k[1:500]$genes
+spat_cor_netw_DT = detectSpatialCorGenes(my_giotto_object,
+                                         method = 'network',
+                                         spatial_network_name = 'Delaunay_network',
+                                         subset_genes = ext_spatial_genes)
+
+```
+43
+```{r}
+spat_cor_netw_DT = clusterSpatialCorGenes(spat_cor_netw_DT,
+                                          name = 'spat_netw_clus', 
+                                          k = 8)
+heatmSpatialCorGenes(gobject = my_giotto_object,
+                     spatCorObject = spat_cor_netw_DT,
+                     use_clus_name = 'spat_netw_clus')
+
+```
+44
+```{r}
+cluster_genes_DT = showSpatialCorGenes(spat_cor_netw_DT,
+                                       use_clus_name = 'spat_netw_clus',
+                                       show_top_genes = 1)
+top40_per_module = cluster_genes_DT[, head(.SD, 40), by = clus]
+
+# 3. create metagenes from cluster modules and visualize
+cluster_genes = top40_per_module$clus; names(cluster_genes) = top40_per_module$gene_ID
+
+my_giotto_object = createMetagenes(my_giotto_object, 
+                                   gene_clusters = cluster_genes, 
+                                   name = 'cluster_metagene')
+spatCellPlot(my_giotto_object,
+             spat_enr_names = 'cluster_metagene',
+             cell_annotation_values = as.character(c(1:8)),
+             point_size = 1.5, 
+             cow_n_col = 3)
+
+```
+# BP - Spatial domain detection by using a hidden Markov random field model
+45
+```{r}
+hmrf_folder = paste0(save_directory,'/','11_HMRF/')
+if(!file.exists(hmrf_folder)) dir.create(hmrf_folder, recursive = T)
+
+# input is the top 40 genes per co-expression module
+HMRF_spat_genes = doHMRF(gobject = my_giotto_object,
+                         expression_values = "normalized",
+                         spatial_genes = names(cluster_genes),
+                         spatial_network_name = "Delaunay_network",
+                         zscore = "none",
+                         k = 8,
+                         betas = c(0,5,6),
+                         output_folder = paste0(hmrf_folder, '/', 'HMRF_output2'))
+
+## add HMRF of interest to giotto object
+my_giotto_object = addHMRF(gobject = my_giotto_object,
+                     HMRFoutput = HMRF_spat_genes,
+                     k = 8, betas_to_add = c(0, 10, 15, 20),
+                     hmrf_name = 'HMRF')
+
+```
+46
+```{r}
+spatPlot2D(my_giotto_object,
+           cell_color = 'HMRF_k8_b.0', 
+           show_image = TRUE,
+           point_size = 4.75,
+           coord_fix_ratio = 1)
+
+spatPlot2D(my_giotto_object,
+           cell_color = 'HMRF_k8_b.20', 
+           show_image = TRUE,
+           point_size = 4.75,
+           coord_fix_ratio = 1)
+
+```
+# SP1 - Spatial proximity associated cell-cell interactions
+47
+```{r}
+cell_proximities = cellProximityEnrichment(gobject = my_giotto_object,
+                                           cluster_column = 'leiden_clus',
+                                           spatial_network_name = 'Delaunay_network',
+                                           adjust_method = 'fdr',
+                                           number_of_simulations = 1000)
+
+```
+48
+```{r}
+cellProximityBarplot(gobject = my_giotto_object,
+                     CPscore = cell_proximities,
+                     min_orig_ints = 3,
+                     min_sim_ints = 3)
+
+```
+49
+```{r}
+cellProximityNetwork(gobject = my_giotto_object,
+                     CPscore = cell_proximities,
+                     remove_self_edges = F,
+                     self_loop_strength = 0.3,
+                     only_show_enrichment_edges = F,
+                     rescale_edge_weights = T,
+                     node_size = 8,
+                     edge_weight_range_depletion = c(1, 2),
+                     edge_weight_range_enrichment = c(2,5))
+
+```
+50
+```{r}
+## select top 25th highest expressing genes
+gene_metadata = fDataDT(my_giotto_object)
+
+high_expressed_genes = gene_metadata[mean_expr_det > quantile(gene_metadata$mean_expr_det)[4]]$gene_ID
+
+## identify genes that are associated with proximity to other cell types
+ICGscoresHighGenes =  findInteractionChangedGenes(gobject = my_giotto_object,
+                                                  selected_genes = high_expressed_genes,
+                                                  spatial_network_name = 'Delaunay_network',
+                                                  cluster_column = 'HMRF_k8_b.20',
+                                                  diff_test = 'permutation',
+                                                  adjust_method = 'fdr',
+                                                  nr_permutations = 2000,
+                                                  do_parallel = TRUE, cores = 4)
+## visualize
+plotCellProximityGenes(my_giotto_object,
+                       cpgObject = ICGscoresHighGenes,
+                       method = 'dotplot')
+
+```
+51
+```{r}
+## filter genes
+ICGscoresFilt = filterInteractionChangedGenes(ICGscoresHighGenes)
+
+## visualize subset of interaction changed genes (ICGs)
+ICGscoresFilt$CPGscores[type_int == 'hetero'][cell_type == '3']
+ICG_genes = c('LAMC2', 'CXCL10', 'PIP', 'WIPI2', 'PI16')
+ICG_genes_types = c('7', '7', '2', '2', '5')
+names(ICG_genes) = ICG_genes_types
+
+plotInteractionChangedGenes(gobject = my_giotto_object,
+                            cpgObject = ICGscoresHighGenes,
+                            source_type = '3',
+                            source_markers = c('CD74', 'HLA-B', 'HLA-DRA'),
+                            ICG_genes = ICG_genes)
+
+```
+52
+```{r}
+combo_ICGs = combineInteractionChangedGenes(cpgObject = ICGscoresHighGenes)
+
+combo_ICGs$combCPGscores[type_int == 'hetero' & direction == 'both_up'][p.adj_1 < 0.01 & p.adj_2 < 0.01 & abs(log2fc_1) > 1 & abs(log2fc_2) > 1]
+
+# visualize
+plotCombineInteractionChangedGenes(gobject = my_giotto_object,
+                                   combCpgObject = combo_ICGs,
+                                   selected_interactions = '2--6',
+                                   selected_gene_to_gene = c('AKR1A1--SERPINB3'))
+
+```
+53
+```{r}
+plotCombineInteractionChangedGenes(gobject = my_giotto_object,
+                                   combCpgObject = combo_ICGs,
+                                   selected_interactions = '1--5',
+                                   selected_gene_to_gene = c('MUCL1--OLA1'))
+
+```
+54
+```{r}
+LR_data = data.table::fread(file = paste0(data_directory, '/', 'PairsLigRec.txt'))
+
+LR_data[, ligand_det := ifelse(HPMR.Ligand %in% my_giotto_object@gene_ID, T, F)]
+LR_data[, receptor_det := ifelse(HPMR.Receptor %in% my_giotto_object@gene_ID, T, F)]
+LR_data_det = LR_data[ligand_det == T & receptor_det == T & Pair.Source == 'known']
+
+select_ligands = LR_data_det$HPMR.Ligand
+select_receptors = LR_data_det$HPMR.Receptor
+
+
+spatial_all_scores = spatCellCellcom(my_giotto_object,
+                                     spatial_network_name = 'Delaunay_network',
+                                     cluster_column = 'HMRF_k8_b.20',
+                                     random_iter = 1000,
+                                     gene_set_1 = select_ligands,
+                                     gene_set_2 = select_receptors,
+                                     adjust_method = 'fdr',
+                                     do_parallel = T,
+                                     cores = 4,
+                                     verbose = 'none')
+
+```
+55
+```{r}
+selected_spat = spatial_all_scores[p.adj <= 0.1 & abs(log2fc) > 0.5 & lig_nr >= 3 & rec_nr >= 3]
+data.table::setorder(selected_spat, -PI)
+
+top_LR_ints = unique(selected_spat[order(-abs(PI))]$LR_comb)[1:33]
+top_LR_cell_ints = unique(selected_spat[order(-abs(PI))]$LR_cell_comb)[1:33]
+
+plotCCcomDotplot(gobject = my_giotto_object,
+                 comScores = spatial_all_scores,
+                 selected_LR = top_LR_ints,
+                 selected_cell_LR = top_LR_cell_ints,
+                 cluster_on = 'PI')
+
+```
+# SP2 - Assembly of a registered 3D Giotto object from 2D slices
+56
+```{r}
+# Get filepaths
+exprpaths <- list(paste0(data_directory, "/P2_1_expression.csv"),
+                  paste0(data_directory, "/P2_2_expression.csv"),
+                  paste0(data_directory, "/P2_3_expression.csv"))
+spatpaths <- list(paste0(data_directory, "/P2_1_spatial_locs.csv"),
+                  paste0(data_directory, "/P2_2_spatial_locs.csv"),
+                  paste0(data_directory, "/P2_3_spatial_locs.csv"))
+xmlpaths <- list(paste0(data_directory, "/imgReg/transforms/P2_1_0.25.xml"),
+                 paste0(data_directory, "/imgReg/transforms/P2_2_0.25.xml"),
+                 paste0(data_directory, "/imgReg/transforms/P2_3_0.25.xml"))
+
+# Alternatively, use the given example .xml files by setting the following path:
+xmlpaths <- list.files(paste0(data_directory, "ImgReg/transforms/exampleXMLs"), full.names = TRUE)
+
+# Read in data
+xmls <- lapply(xmlpaths, readChar, nchar = 1000)
+spatlocs <- lapply(spatpaths, read.csv)
+exprCounts <- lapply(exprpaths, Giotto::readExprMatrix)
+
+```
+57
+```{r}
+z_vals <- c(0,10,20)
+z_vals <- z_vals * 1.8
+
+```
+58
+```{r}
+my_giotto_object_3D <- createRegZStackGobject(expression_list = exprCounts,
+                                              spatlocs_list = spatlocs,
+                                              xvals = "pixel_x",
+                                              yvals = "pixel_y",
+                                              scalefactor = 0.25,
+                                              transformXML = xmls,
+                                              z_vals = z_vals)
+
+```
+59
+```{r}
+spatPlot3D(gobject = my_giotto_object_3D,
+           axis_scale = "cube",
+           point_size = 5)
+spatPlot3D(gobject = my_giotto_object_3D,
+           axis_scale = "real",
+           point_size = 5)
+
+```
+60
+```{r}
+# Visualize 3D data with leiden clusters
+my_colors = c("#9442f2","#b6d326","#fa002a","#fa00d4","#013bb5",
+              "#666666","#017fd6","#50cfff","#cf8cff","#01d671")
+
+spatPlot3D(gobject = my_giotto_object_3D,
+           axis_scale = "cube",
+           point_size = 5,
+           cell_color_code = my_colors,
+           cell_color = "leiden_clus")
+
+spatPlot2D(gobject = my_giotto_object_3D,
+           point_size = 3.5,
+           coord_fix_ratio = 1,
+           cell_color_code = my_colors,
+           cell_color = "leiden_clus")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -710,12 +710,12 @@ my_giotto_object = addHMRF(gobject = my_giotto_object,
 
 ## Visualizations
 ```{r}
-names(mycolors) = 1:8
+names(my_colors) = 1:8
 
 # intrinsic only
 spatPlot2D(my_giotto_object,
            cell_color = 'HMRF_k8_b.0', show_image = TRUE,
-           cell_color_code = mycolors, 
+           cell_color_code = my_colors, 
            point_size = 4.75,
            coord_fix_ratio = 1,
            save_param = list(save_name = 'fig22a_spatCellPlot', 
@@ -725,7 +725,7 @@ spatPlot2D(my_giotto_object,
 
 spatPlot2D(my_giotto_object,
            cell_color = 'HMRF_k8_b.20', show_image = TRUE,
-           cell_color_code = mycolors,
+           cell_color_code = my_colors,
            point_size = 4.75,
            coord_fix_ratio = 1,
            save_param = list(save_name = 'fig_22b_spatCellPlot', 

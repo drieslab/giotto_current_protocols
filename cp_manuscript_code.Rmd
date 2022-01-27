@@ -5,6 +5,7 @@
 # BP1 - Getting Giotto set up for use
 2
 ```{r}
+install.packages("remotes")
 remotes::install_github("RubD/Giotto")
 library(Giotto)
 ```

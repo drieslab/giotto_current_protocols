@@ -5,7 +5,7 @@
 # BP1 - Getting Giotto set up for use
 2
 ```{r}
-remotes::install_gitub("RubD/Giotto")
+remotes::install_github("RubD/Giotto")
 library(Giotto)
 ```
 3
@@ -23,6 +23,8 @@ getSpatialDataset(dataset = "ST_SCC", directory = data_directory, method = "wget
 5
 ```{r}
 my_instructions <- createGiottoInstructions(save_plot = TRUE,
+                                            show_plot = TRUE,
+                                            return_plot = FALSE,
                                             save_dir = save_directory)
 
 ```
@@ -435,7 +437,7 @@ cellProximityNetwork(gobject = my_giotto_object,
                      only_show_enrichment_edges = F,
                      rescale_edge_weights = T,
                      node_size = 8,
-                     edge_weight_range_depletion = c(1, 2),
+                     edge_weight_range_depletion = c(1,2),
                      edge_weight_range_enrichment = c(2,5))
 
 ```
@@ -554,7 +556,7 @@ xmlpaths <- list(paste0(data_directory, "/imgReg/transforms/P2_1_0.25.xml"),
                  paste0(data_directory, "/imgReg/transforms/P2_3_0.25.xml"))
 
 # Alternatively, use the given example .xml files by setting the following path:
-xmlpaths <- list.files(paste0(data_directory, "ImgReg/transforms/exampleXMLs"), full.names = TRUE)
+xmlpaths <- list.files(paste0(data_directory, "/imgReg/transforms/exampleXMLs"), full.names = TRUE)
 
 # Read in data
 xmls <- lapply(xmlpaths, readChar, nchar = 1000)
@@ -594,6 +596,11 @@ spatPlot3D(gobject = my_giotto_object_3D,
 # Visualize 3D data with leiden clusters
 my_colors <- c("#9442f2","#b6d326","#fa002a","#fa00d4","#013bb5",
                "#666666","#017fd6","#50cfff","#cf8cff","#01d671")
+
+cellMetadata_3D <- readRDS(file = paste0(data_directory, "/imgReg/cellMetadata3D.rds"))
+my_giotto_object_3D <- addCellMetadata(gobject = my_giotto_object_3D,
+                                       new_metadata = cellMetadata_3D,
+                                       by_column = "cell_ID")
 
 spatPlot3D(gobject = my_giotto_object_3D,
            axis_scale = "cube",

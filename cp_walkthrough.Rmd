@@ -15,7 +15,7 @@ If you already have Giotto installed, make sure to restart your R session before
 
 ```{r}
 library(remotes)
-remotes::install_github("RubD/Giotto@development")
+remotes::install_github("RubD/Giotto")
 library(Giotto)
 # confirm correct version of Giotto
 packageVersion("Giotto")
@@ -51,6 +51,8 @@ First, we'll create Giotto instructions so that we can save our plots to our sav
 After setting our instructions, we will create our Giotto object using the installed data. 
 ```{r}
 my_instructions <- createGiottoInstructions(save_plot = TRUE,
+                                            show_plot = TRUE,
+                                            return_plot = FALSE,
                                             save_dir = save_directory)
 
 my_giotto_object <- createGiottoObject(raw_exprs = paste0(data_directory, "/P2_2_expression.csv"),
@@ -126,7 +128,7 @@ filterCombinations(my_giotto_object,
                                      base_height = 6, 
                                      save_format = 'pdf'))
 ```
-Apply filter
+Filter data
 ```{r}
 my_giotto_object <- filterGiotto(gobject = my_giotto_object,
                                  expression_threshold = 2,
@@ -467,21 +469,39 @@ plotUMAP(my_scrna_object,
                            base_width = 6, 
                            base_height = 6, 
                            save_format = 'pdf'))
+
+# Pull out normalized expression for later use
+normalized_sc_matrix <- my_scrna_object@norm_expr
+
+# Get cell type vector
+cell_type_vector <- pDataDT(my_scrna_object)$merge_cell_types
+
+# Find differentially expressed genes and create sign_list
+scran_markers_subclusters_sc <- findMarkers_one_vs_all(gobject = my_scrna_object,
+                                                       method = 'scran',
+                                                       expression_values = 'normalized',
+                                                       cluster_column = 'merge_cell_types')
+
+Sig_scran <- scran_markers_subclusters_sc[which(scran_markers_subclusters_sc$ranking <= 100),]
+sign_list <- list()
+for(cell_name in c('DC','Endothelial','Epithelial','Fibroblast','LC','Macrophage','Mature DC','Melanocyte','pDC','T Cell')) {
+  sign_list[[cell_name]] <- Sig_scran$genes[which(Sig_scran$cluster == cell_name)]
+}
 ```
 
 ## Differentially expressed genes (DEGs)
 ```{r}
 # Find differentially expressed genes
-scran_markers_subclusters <- findMarkers_one_vs_all(gobject = my_scrna_object,
+scran_markers_subclusters <- findMarkers_one_vs_all(gobject = my_giotto_object,
                                                     method = 'scran',
                                                     expression_values = 'normalized',
-                                                    cluster_column = 'merge_cell_types')
+                                                    cluster_column = 'leiden_clus')
 
-Sig_scran <- unique(scran_markers_subclusters$genes[which(scran_markers_subclusters$ranking <= 100)])
-top4genes <- scran_markers_subclusters[, head(.SD, 4), by = 'cluster']
-plotMetaDataHeatmap(gobject = my_scrna_object, 
-                    selected_genes = top4genes$genes,
-                    metadata_cols = c('merge_cell_types'),
+Sig_scran <- scran_markers_subclusters[which(scran_markers_subclusters$ranking <= 100),]
+ST_top3genes <- scran_markers_subclusters[, head(.SD, 3), by = 'cluster']
+plotMetaDataHeatmap(gobject = my_giotto_object, 
+                    selected_genes = ST_top3genes$genes,
+                    metadata_cols = c('leiden_clus'),
                     save_param = list(save_name = 'fig13_plotMetaDataHeatmap', 
                                       base_width = 6, 
                                       base_height = 6, 
@@ -495,11 +515,11 @@ plotMetaDataHeatmap(gobject = my_scrna_object,
 
 Parametric Analysis of Gene Set Enrichment (PAGE)
 ```{r}
-# list of signature genes
-sign_list <- Sig_scran
+# list of signature genes from scRNAseq analysis
+sign_list <- sign_list
 
 # make PAGE signature matrix
-PAGEsignMatrix <- makeSignMatrixPAGE(sign_names = cell_type_names,
+PAGEsignMatrix <- makeSignMatrixPAGE(sign_names = names(sign_list),
                                       sign_list = sign_list)
 
 # run PAGE
@@ -527,7 +547,7 @@ Spatial dampened weighted least squares (DWLS) deconvolution
 ```{r}
 # Make DWLS signature matrix
 dwls_signature_matrix <- makeSignMatrixDWLSfromMatrix(matrix = normalized_sc_matrix,
-                                                      sign_gene = sign_list,
+                                                      sign_gene = unlist(sign_list),
                                                       cell_type_vector = cell_type_vector)
 
 # dwls deconvolution
@@ -689,7 +709,6 @@ spatCellPlot(my_giotto_object,
 The HMRF analysis creates a new directory to store all of its data.
 ```{r}
 hmrf_folder <- paste0(save_directory,'/','11_HMRF/')
-if(!file.exists(hmrf_folder)) dir.create(hmrf_folder, recursive = T)
 
 # input is the top 40 genes per co-expression module
 HMRF_spat_genes <- doHMRF(gobject = my_giotto_object,
@@ -699,7 +718,7 @@ HMRF_spat_genes <- doHMRF(gobject = my_giotto_object,
                           zscore = "none",
                           k = 8,
                           betas = c(0,5,6),
-                          output_folder = paste0(hmrf_folder, '/', 'HMRF_output2'))
+                          output_folder = hmrf_folder)
 
 ## add HMRF of interest to giotto object
 my_giotto_object <- addHMRF(gobject = my_giotto_object,
@@ -767,6 +786,7 @@ cellProximityNetwork(gobject = my_giotto_object,
                                        base_width = 6, 
                                        base_height = 6, 
                                        save_format = 'pdf'))
+# cellProximityNetwork may plot the nodes differently every time, but interactions are the same.
 ```
 
 ## Interaction Changed Genes (ICGs)
@@ -949,11 +969,11 @@ my_giotto_object_3D <- filterGiotto(my_giotto_object_3D,
 spatPlot3D(gobject = my_giotto_object_3D,
            axis_scale = "cube",
            return_plot = FALSE,
-           save_param = list(save_name = 'fig_32a_spatPlots_3D'))
+           save_param = list(save_name = 'fig_36a_spatPlots_3D'))
 spatPlot3D(gobject = my_giotto_object_3D,
            axis_scale = "real",
            return_plot = FALSE,
-           save_param = list(save_name = 'fig_32b_spatPlots_3D'))
+           save_param = list(save_name = 'fig_36b_spatPlots_3D'))
 ```
 
 ## Expression-based clustering (not shown in protocols paper)
@@ -998,7 +1018,7 @@ spatPlot3D(gobject = my_giotto_object_3D,
            axis_scale = "cube",
            point_size = 5,
            cell_color_code = my_colors,
-           save_param = list(save_name = 'fig_33a_leiden3D'),
+           save_param = list(save_name = 'fig_37a_leiden3D'),
            cell_color = "leiden_clus")
 
 spatPlot2D(gobject = my_giotto_object_3D,
@@ -1006,7 +1026,7 @@ spatPlot2D(gobject = my_giotto_object_3D,
            point_size = 3.5,
            coord_fix_ratio = 1,
            cell_color_code = my_colors,
-           save_param = list(save_name = 'fig_33b_leiden3D', base_width = 6, base_height = 6, save_format = 'pdf'),
+           save_param = list(save_name = 'fig_37b_leiden3D', base_width = 6, base_height = 6, save_format = 'pdf'),
            cell_color = "leiden_clus")
 ```
 

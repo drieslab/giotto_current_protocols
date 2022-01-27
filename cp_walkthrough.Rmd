@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 If you already have Giotto installed, make sure to restart your R session before reloading the package and running and subsequent code. 
 
 ```{r}
-library(remotes)
+install.packages("remotes")
 remotes::install_github("RubD/Giotto")
 library(Giotto)
 # confirm correct version of Giotto
